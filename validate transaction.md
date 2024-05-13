@@ -49,14 +49,44 @@ The second thing for validation of transaction is to verify signature, In previo
 and we can run it to validate the transaction, but the problem is we don't know the message for the signature, now here we give the ways to
 construct it by the following ways:
 
-1,find the scriptsig from the input, take the transaction above, we use text in red color to show the part of scriptsig binary data:
+1,find the scriptsig from the input, take the transaction above, we use { and } to show the part of scriptsig binary data:
 0100000001813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d100000000
-```diff
--6b483045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf21320b027745
+{
+6b483045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf21320b027745
 7c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed
 01210349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
 }
 ```
 feffffff02a135ef01000000001976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88
 ac99c39800000000001976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac19430600
+
+2. remove data for the scriptsig and change it to a single byte with value 00:
+
+0100000001813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d100000000
+{
+00
+}
+```
+feffffff02a135ef01000000001976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88
+ac99c39800000000001976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac19430600
+
+3. As we have seen in previous section, we need to get the scriptpubkey from the output of last transaction as show in following:
+   
+![bitcoin_script](https://github.com/wycl16514/golang-bitcoin-transaction-create-validate/assets/7506958/26675d48-8900-4113-b5e6-78a817a71493)
+
+we get the scriptpubkey from previous transaction output, the following binary data is the scirptpubkey of from the previous transaction
+of our transaction above:
+
+1976a914a802fc56c704ce87c42d7c92eb75e7896bdc41ae88ac
+
+then we replace the data above to the 00 we put in last step as show in the following:
+
+0100000001813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d100000000
+{
+1976a914a802fc56c704ce87c42d7c92eb75e7896bdc41ae88ac
+}
+```
+feffffff02a135ef01000000001976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88
+ac99c39800000000001976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac19430600
+
 
