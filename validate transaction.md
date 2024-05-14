@@ -39,10 +39,12 @@ Now we can construct a transaction and check its fee like following:
 	transaction := tx.ParseTransaction(binary)
 	fmt.Printf("Fee of transaction is :%v\n", transaction.Fee())
 ```
+
 Running the above code we can get the following result:
-```
+```g
 Fee of transaction is :40000
 ```
+
 This means there are 40000 stashi left after the transaction, and no fake money created by this transaction.
 
 The second thing for validation of transaction is to verify signature, In previous section, we combined scriptpubkey and  scriptsig together,
