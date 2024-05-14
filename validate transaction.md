@@ -141,6 +141,122 @@ func main() {
 	fmt.Printf("the evaluation result is: %v\n", res)
 }
 ```
-Run the above code and you can see the final step that is OP_CHECKSIG can be passed and the evaluate result returns true.
+Run the above code and you can see the final step that is OP_CHECKSIG can be passed and the evaluate result returns true. In aboved code, we use hand to modify the 
+transaction binary data, let's see how to do it by code instead of hand, first we need to make some change to BigIntToLittleEndian in util.go:
+```g
+func BigIntToLittleEndian(v *big.Int, length LITTLE_ENDIAN_LENGTH) []byte {
+	switch length {
+	case LITTLE_ENDIAN_2_BYTES:
+		bin := make([]byte, 2)
+		binary.LittleEndian.PutUint16(bin, uint16(v.Uint64()))
+		return bin
+	case LITTLE_ENDIAN_4_BYTES:
+		bin := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bin, uint32(v.Uint64()))
+		return bin
+	case LITTLE_ENDIAN_8_BYTES:
+		bin := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bin, v.Uint64())
+		return bin
+	}
+
+	return nil
+}
+```
+Then we goto input.go, We need to add two methods to Transaction input one for getting script pub key from output of previous tranction, the other is to replace
+the scriptSig with scriptPubKey as we metioned in step 3:
+```g
+func (t *TransactinInput) ScriptPubKey(testnet bool) *ScriptSig {
+	tx := t.getPreviousTx(testnet)
+	return tx.txOutputs[t.previousTransactionIdex.Int64()].scriptPubKey
+}
+
+func (t *TransactinInput) ReplaceWithScriptPubKey(testnet bool) {
+	//use scriptpubkey of previous transaction to replace current scriptsig
+	tx := t.getPreviousTx(testnet)
+	t.scriptSig = tx.txOutputs[t.previousTransactionIdex.Int64()].scriptPubKey
+}
+```
+
+Then in transaction.go, we serialize the transaction into binary data and replace the scriptSig in given input with the scriptPubKey from output of previous 
+transaction:
+```g
+func (t *Transaction) SignHash(inputIdx int) []byte {
+	/*
+		construct signature message for the given input,we need to change the given
+		scriptsig of the input to the scriptpubkey of previous transaction, and serialize
+		the transaction to binary data
+	*/
+	signBinary := make([]byte, 0)
+	signBinary = append(signBinary, BigIntToLittleEndian(t.version, LITTLE_ENDIAN_4_BYTES)...)
+
+	inputCount := big.NewInt(int64(len(t.txInputs)))
+	signBinary = append(signBinary, EncodeVarint(inputCount)...)
+	//serialize inputs, need to replace the given input scriptsig to
+	//previous transaction scriptpubkey
+	for i := 0; i < len(t.txInputs); i++ {
+		if i == inputIdx {
+			//found the given input, replace its scriptsig with the scriptpubkey of previous transaction
+			t.txInputs[i].ReplaceWithScriptPubKey(t.testnet)
+			signBinary = append(signBinary, t.txInputs[i].Serialize()...)
+		} else {
+			signBinary = append(signBinary, t.txInputs[i].Serialize()...)
+		}
+	}
+	outputCount := big.NewInt(int64(len(t.txOutputs)))
+	signBinary = append(signBinary, EncodeVarint(outputCount)...)
+	for i := 0; i < len(t.txOutputs); i++ {
+		signBinary = append(signBinary, t.txOutputs[i].Serialize()...)
+	}
+	signBinary = append(signBinary, BigIntToLittleEndian(t.lockTime, LITTLE_ENDIAN_4_BYTES)...)
+	signBinary = append(signBinary,
+		BigIntToLittleEndian(big.NewInt(int64(SIGHASH_ALL)), LITTLE_ENDIAN_4_BYTES)...)
+	//compute hash256 for the modified transaction binary
+
+	h256 := ecc.Hash256(string(signBinary))
+	return h256
+}
+
+func (t *Transaction) VerifyInput(inputIndex int) bool {
+	// txIn := t.txInputs[inputIndex]
+	// scriptPubKey := txIn.ScriptPubKey(t.testnet)
+	// verifyScript := txIn.scriptSig.Add(scriptPubKey)
+	verifyScript := t.GetScript(inputIndex, t.testnet)
+	z := t.SignHash(inputIndex)
+	return verifyScript.Evaluate(z)
+}
+```
+
+In above code method SignHash is implementing 4 steps above by code, and method VerifyInput constructs the verify script by using the GetScript method of 
+TransactionInput, then call SignHash to get the signature message and evaluate the message by using the verify script and return the final result.
+
+Let's goto main.go and use code to call those code we just add:
+```g
+package main
+
+import (
+	"encoding/hex"
+	"fmt"
+	tx "transaction"
+)
+
+func main() {
+	//legacy transaction
+	binaryStr := "0100000001813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d1000000006b483045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf21320b0277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01210349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278afeffffff02a135ef01000000001976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88ac99c39800000000001976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac19430600"
+
+	binary, err := hex.DecodeString(binaryStr)
+	if err != nil {
+		panic(err)
+	}
+	transaction := tx.ParseTransaction(binary)
+	res := transaction.VerifyInput(0)
+	fmt.Printf("the evaluation result is: %v\n", res)
+}
+```
+Running above code will have the following result:
+```g
+the evaluation result is: true
+```
+This shows we can verify transaction signature successfully!
 
 
