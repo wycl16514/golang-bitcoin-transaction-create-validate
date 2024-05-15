@@ -225,6 +225,24 @@ func (t *Transaction) VerifyInput(inputIndex int) bool {
 	z := t.SignHash(inputIndex)
 	return verifyScript.Evaluate(z)
 }
+
+func (t *Transaction) Verify() bool {
+	/*
+		1. verify fee
+		2. verify signature of each input
+	*/
+	if t.Fee().Cmp(big.NewInt(int64(0))) < 0 {
+		return false
+	}
+
+	for i := 0; i < len(t.txInputs); i++ {
+		if t.VerifyInput(i) != true {
+			return false
+		}
+	}
+
+	return true
+}
 ```
 
 In above code method SignHash is implementing 4 steps above by code, and method VerifyInput constructs the verify script by using the GetScript method of 
@@ -249,7 +267,7 @@ func main() {
 		panic(err)
 	}
 	transaction := tx.ParseTransaction(binary)
-	res := transaction.VerifyInput(0)
+	res := transaction.Verify()
 	fmt.Printf("the evaluation result is: %v\n", res)
 }
 ```
