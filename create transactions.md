@@ -113,19 +113,16 @@ func InitTransactionInput(previousTx []byte, previousIndex *big.Int) *Transactin
         previousTransactionIdex: previousIndex,
 	}
 }
+
+func (t *TransactinInput) String() string {
+	return fmt.Sprintf("previous transaction: %x\n previous tx index: %x\n",
+		t.previousTransaction, t.previousTransactionIdex)
+}
 ```
-Then we can construct the transactin input for our current transaction as following:
-```g
-        prevTxHash, err := hex.DecodeString("703158ce66391f094ab2195cfe5579214073ba90997d0b98e6e410ed1b67aa8a")
-	if err != nil {
-		panic(err)
-	}
-	prevTxIndex := big.NewInt(int64(1))
-	txInput := tx.InitTransactionInput(prevTxHash, prevTxIndex)
-```
-Now we need to construct the output, which is used to detail about how many bitcoins will received by whom. One thing to be noticed is we need to pay mining fee to
-miner, the more you pay, the faster they help to put you transaction on the chain, I have 0.00019756 tBTC now, I try to pay 0.00009756 tBTC as mining fee, how many 
-fee need to pay has not algorithm to calculated, it depends on experience and market situation.
+
+Now we need to construct the output, which is used to detail about how many bitcoins will received by whom. One thing to be noticed is we need to pay mining fee to miner, the more you pay, the faster they help to put you transaction on the chain,
+I have 0.00019756 tBTC now, I try to pay 0.00009756 tBTC as mining fee, how many fee need to pay has not algorithm to calculated, 
+it depends on experience and market situation.
 
 After substracting the mining fee, we transfer 0.0001 tBTC back to my account, therefore we need to construct one output with amount 0.0001 * STASHI_PER_BITCOIN,
 the value of STASHI_PER_BITCOIN is defined in util.go as following:
@@ -133,5 +130,95 @@ the value of STASHI_PER_BITCOIN is defined in util.go as following:
 const (
 	STASHI_PER_BITCOIN = 100000000
 )
+```
+Now let's go to output.go, add init function for TransactionOutput Object:
+
+```g
+func InitTransactionOutput(amount *big.Int, script *ScriptSig) *TransactionOutput {
+	return &TransactionOutput{
+		amount:       amount,
+		scriptPubKey: script,
+	}
+}
+
+func (t *TransactionOutput) String() string {
+	return fmt.Sprintf("amount: %v\n scriptPubKey: %x\n", t.amount,
+		t.scriptPubKey.Serialize())
+}
+```
+goto transaction.go we add init function for Transaction object:
+```g
+func InitTransaction(version *big.Int, txInputs []*TransactinInput,
+	txOutputs []*TransactionOutput, lockTime *big.Int, testnet bool) *Transaction {
+	return &Transaction{
+		version:   version,
+		txInputs:  txInputs,
+		txOutputs: txOutputs,
+		lockTime:  lockTime,
+		testnet:   testnet,
+	}
+}
+
+func (t *Transaction) String() string {
+	txIns := ""
+	for i := 0; i < len(t.txInputs); i++ {
+		txIns += t.txInputs[i].String()
+		txIns += "\n"
+	}
+
+	txOuts := ""
+	for i := 0; i < len(t.txOutputs); i++ {
+		txOuts += t.txOutputs[i].String()
+		txOuts += "\n"
+	}
+
+	return fmt.Sprintf("tx: version: %x\n transaction inputs\n:%s\n transaction outputs:\n %s\n, locktime: %x\n",
+		t.version, txIns, txOuts, t.lockTime)
+}
+```
+
+Finally we can construct the whole transaction as following:
+```g
+func main() {
+	//construct transaction input by using the previous transaction id and output index
+	prevTxHash, err := hex.DecodeString("703158ce66391f094ab2195cfe5579214073ba90997d0b98e6e410ed1b67aa8a")
+	if err != nil {
+		panic(err)
+	}
+	prevTxIndex := big.NewInt(int64(1))
+	txInput := tx.InitTransactionInput(prevTxHash, prevTxIndex)
+
+	/*
+		construct the TransactionOutput object by setting the transfering amount
+		and verify script
+	*/
+	changeAmount := big.NewInt(int64(0.0001 * tx.STASHI_PER_BITCOIN))
+	changeH160 := ecc.DecodeBase58("mpNzUycBH6SDU9amLK5raP6Qm71CWNezHv")
+	changeScript := tx.P2pkScrit(changeH160)
+	changeOut := tx.InitTransactionOutput(changeAmount, changeScript)
+	//Init transaction
+	transaction := tx.InitTransaction(big.NewInt(int64(1)), []*tx.TransactinInput{txInput},
+		[]*tx.TransactionOutput{changeOut}, big.NewInt(int64(0)), true)
+	fmt.Printf("%s\n", transaction)
+}
+```
+Running the above code we can get the following result:
+```g
+tx: version: 1
+ transaction inputs
+:previous transaction: 703158ce66391f094ab2195cfe5579214073ba90997d0b98e6e410ed1b67aa8a
+ previous tx index: 1
+
+
+ transaction outputs:
+ amount: 10000
+ scriptPubKey: 1976a9146137a18e79a0211946915549b5d155fc75c49b3388ac
+
+
+, locktime: 0
+```
+The output looks correct, now we need to sign the transaction:
+```g
+
 ```
 
