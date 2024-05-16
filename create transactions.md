@@ -123,5 +123,15 @@ Then we can construct the transactin input for our current transaction as follow
 	prevTxIndex := big.NewInt(int64(1))
 	txInput := tx.InitTransactionInput(prevTxHash, prevTxIndex)
 ```
-Now we need to construct the output, which is used to detail about how many bitcoins will received by whom.
+Now we need to construct the output, which is used to detail about how many bitcoins will received by whom. One thing to be noticed is we need to pay mining fee to
+miner, the more you pay, the faster they help to put you transaction on the chain, I have 0.00019756 tBTC now, I try to pay 0.00009756 tBTC as mining fee, how many 
+fee need to pay has not algorithm to calculated, it depends on experience and market situation.
+
+After substracting the mining fee, we transfer 0.0001 tBTC back to my account, therefore we need to construct one output with amount 0.0001 * STASHI_PER_BITCOIN,
+the value of STASHI_PER_BITCOIN is defined in util.go as following:
+```g
+const (
+	STASHI_PER_BITCOIN = 100000000
+)
+```
 
