@@ -118,6 +118,10 @@ func (t *TransactinInput) String() string {
 	return fmt.Sprintf("previous transaction: %x\n previous tx index: %x\n",
 		t.previousTransaction, t.previousTransactionIdex)
 }
+
+func (t *TransactinInput) SetScriptSig(sig *ScriptSig) {
+	t.scriptSig = sig
+}
 ```
 
 Now we need to construct the output, which is used to detail about how many bitcoins will received by whom. One thing to be noticed is we need to pay mining fee to miner, the more you pay, the faster they help to put you transaction on the chain,
@@ -219,6 +223,89 @@ tx: version: 1
 ```
 The output looks correct, now we need to sign the transaction:
 ```g
+//sign the first transaction because we only have one
+	z := transaction.SignHash(0)
+	zMsg := new(big.Int)
+	zMsg.SetBytes(z)
+	der := privateKey.Sign(zMsg).Der()
+	//add last byte as hash type
+	sig := append(der, byte(tx.SIGHASH_ALL))
+	_, sec := pubKey.Sec(true)
+	scritSig := tx.InitScriptSig([][]byte{sig, sec})
+	txInput.SetScriptSig(scritSig)
 
 ```
+Now we need to serialize the transaction input raw data, and we have done this in SighHash, the only problem is we replace the scriptSig of the given input, 
+if we don't replace it, the return result is the raw data of the transaction, therefore we exract part of the SignHash out as following:
+```g
+func (t *Transaction) SerializeWithSign(inputIdx int) []byte {
+	/*
+		construct signature message for the given input,we need to change the given
+		scriptsig of the input to the scriptpubkey of previous transaction, and serialize
+		the transaction to binary data
+	*/
+	signBinary := make([]byte, 0)
+	signBinary = append(signBinary, BigIntToLittleEndian(t.version, LITTLE_ENDIAN_4_BYTES)...)
 
+	inputCount := big.NewInt(int64(len(t.txInputs)))
+	signBinary = append(signBinary, EncodeVarint(inputCount)...)
+	//serialize inputs, need to replace the given input scriptsig to
+	//previous transaction scriptpubkey
+	for i := 0; i < len(t.txInputs); i++ {
+		if i == inputIdx {
+			//found the given input, replace its scriptsig with the scriptpubkey of previous transaction
+			t.txInputs[i].ReplaceWithScriptPubKey(t.testnet)
+			signBinary = append(signBinary, t.txInputs[i].Serialize()...)
+		} else {
+			signBinary = append(signBinary, t.txInputs[i].Serialize()...)
+		}
+	}
+	outputCount := big.NewInt(int64(len(t.txOutputs)))
+	signBinary = append(signBinary, EncodeVarint(outputCount)...)
+	for i := 0; i < len(t.txOutputs); i++ {
+		signBinary = append(signBinary, t.txOutputs[i].Serialize()...)
+	}
+	signBinary = append(signBinary, BigIntToLittleEndian(t.lockTime, LITTLE_ENDIAN_4_BYTES)...)
+	signBinary = append(signBinary,
+		BigIntToLittleEndian(big.NewInt(int64(SIGHASH_ALL)), LITTLE_ENDIAN_4_BYTES)...)
+	//compute hash256 for the modified transaction binary
+	return signBinary
+}
+
+func (t *Transaction) SignHash(inputIdx int) []byte {
+	signBinary := t.SerializeWithSign(inputIdx)
+	//compute hash256 for the modified transaction binary
+	h256 := ecc.Hash256(string(signBinary))
+	return h256
+}
+```
+
+When all things done, we call Verify of transaction to make sure it can verify it self, if the verification is success, we then serialize the transaction:
+```g
+    rawTx := transaction.SerializeWithSign(-1)
+    fmt.Printf("Transaction raw data:%x\n", rawTx)
+
+```
+Notices that we put -1 to SerializeWithSign, this will prevent it to replace any transaction input script,run the above code we can get the following result:
+```g
+verify result: true
+Transaction raw data:01000000018aaa671bed10e4e6980b7d9990ba7340217955fe5c19b24a091f3966ce583170010000006b483045022100b76200083845186983287805f1c6579c9ba861f3107691d5137f515654c992c5022015c60f592026997e79231adaf694063cd4eb8cd9addec59f5b2d0c694cff550801210326423c1bc88465bd1649c85998affb05c3238955400020f24244f925e4dc22acffffffff0110270000000000001976a9146137a18e79a0211946915549b5d155fc75c49b3388ac0000000001000000
+
+```
+Your output of transaction raw data may differ with me because the secret key, let's copy the raw data and goto following site:
+https://live.blockcypher.com/btc/pushtx/
+remember to select the network as bitcoin testnet,and past the transaction raw data into the eidtor:
+
+![截屏2024-05-17 14 24 48](https://github.com/wycl16514/golang-bitcoin-transaction-create-validate/assets/7506958/00c6a4af-3769-4607-8d97-74db95556351)
+
+then click the button "Broadcast Transaction", if it is success, it will show the following page:
+
+![截屏2024-05-17 15 15 53](https://github.com/wycl16514/golang-bitcoin-transaction-create-validate/assets/7506958/f70f5674-ff63-48ee-b60d-50469b093858)
+
+This means our creation of transaction is correct and it can be broadcast to the netwok, wait for a monent we can find a new transaction happended for the given address:
+mpNzUycBH6SDU9amLK5raP6Qm71CWNezHv as following:
+
+![截屏2024-05-17 15 28 43](https://github.com/wycl16514/golang-bitcoin-transaction-create-validate/assets/7506958/614dd351-e849-4c7d-bb8b-a077c0e5ca12)
+
+
+if you achive this, please congradulate yourself!!
