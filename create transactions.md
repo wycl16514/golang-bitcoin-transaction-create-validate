@@ -296,7 +296,8 @@ Your output of transaction raw data may differ with me because the secret key, l
 https://live.blockcypher.com/btc/pushtx/
 remember to select the network as bitcoin testnet,and past the transaction raw data into the eidtor:
 
-![截屏2024-05-17 14 24 48](https://github.com/wycl16514/golang-bitcoin-transaction-create-validate/assets/7506958/00c6a4af-3769-4607-8d97-74db95556351)
+![截屏2024-05-17 15 37 49](https://github.com/wycl16514/golang-bitcoin-transaction-create-validate/assets/7506958/2059e6bb-33a3-4dfb-bbba-a676a1f6a117)
+
 
 then click the button "Broadcast Transaction", if it is success, it will show the following page:
 
